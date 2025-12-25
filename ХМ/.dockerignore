@@ -1,0 +1,22 @@
+# Игнорируем в Docker
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+.git/
+.gitignore
+Dockerfile
+docker-compose.yml
+README.md
+.vscode/
+.idea/
+*.log
+logs/
+temp/
+test/
+*.zip
