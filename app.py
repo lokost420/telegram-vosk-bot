@@ -96,28 +96,108 @@ def recognize_speech(audio_path):
             pass
 
 # Обработчики команд
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Я бот для распознавания речи.\n"
-        "Отправьте мне голосовое сообщение или аудиофайл."
-    )
+async def start(update: Update,
+cat > app.py << 'EOF'
+import os
+import logging
+import tempfile
+import json
+import subprocess
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import vosk
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📌 Доступные команды:\n"
-        "/start - начать работу\n"
-        "/help - помощь\n"
-        "/status - статус бота\n\n"
-        "Просто отправьте голосовое сообщение!"
-    )
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if model:
-        await update.message.reply_text("✅ Бот работает, модель загружена")
-    else:
-        await update.message.reply_text("❌ Модель не загружена")
+# Загрузка модели Vosk
+MODEL_PATH = "vosk-model-ru-0.42"
+model = None
 
-async def handle_voice(update: Update,
+def init_model():
+    global model
+    try:
+        if not os.path.exists(MODEL_PATH):
+            logger.error(f"Модель не найдена: {MODEL_PATH}")
+            return False
+        
+        logger.info("Загружаю модель Vosk...")
+        model = vosk.Model(MODEL_PATH)
+        logger.info("Модель успешно загружена")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка загрузки модели: {e}")
+        return False
+
+def convert_audio_to_wav(input_path, output_path):
+    """Конвертация аудио в WAV формат"""
+    try:
+        command = [
+            'ffmpeg', '-i', input_path,
+            '-ar', '16000',
+            '-ac', '1',
+            '-acodec', 'pcm_s16le',
+            output_path,
+            '-y',
+            '-loglevel', 'error'
+        ]
+        subprocess.run(command, check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Ошибка конвертации: {e.stderr.decode()}")
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        return False
+
+def recognize_speech(audio_path):
+    """Распознавание речи"""
+    if model is None:
+        return "Модель не загружена"
+    
+    # Создаем временный WAV файл
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+        wav_path = tmp.name
+    
+    try:
+        # Конвертируем в WAV
+        if not convert_audio_to_wav(audio_path, wav_path):
+            return "Ошибка конвертации аудио"
+        
+        # Настраиваем распознаватель
+        recognizer = vosk.KaldiRecognizer(model, 16000)
+        
+        # Читаем аудиофайл
+        with open(wav_path, 'rb') as f:
+            audio_data = f.read()
+        
+        # Распознаем
+        if recognizer.AcceptWaveform(audio_data):
+            result = json.loads(recognizer.Result())
+            text = result.get('text', '')
+        else:
+            result = json.loads(recognizer.FinalResult())
+            text = result.get('text', '')
+        
+        return text if text else "Речь не распознана"
+        
+    except Exception as e:
+        logger.error(f"Ошибка распознавания: {e}")
+        return f"Ошибка: {str(e)}"
+    finally:
+        # Удаляем временный файл
+        try:
+            os.unlink(wav_path)
+        except:
+            pass
+
+# Обработчики команд
+async def start(update: Update,
+rm app.py
 cat > app.py << 'EOF'
 import os
 import logging
